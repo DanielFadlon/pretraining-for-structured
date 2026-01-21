@@ -24,6 +24,7 @@ venv/
 checkpoints/
 outputs/
 models/
+results/
 saved_models/
 runs/
 logs/

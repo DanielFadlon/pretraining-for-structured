@@ -22,8 +22,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from datasets import Split
 
-from trainer.run_finetuning import finetune_model
-from utils.file_utils import call_function_by_path, read_yaml
+from src.trainer.run_finetuning import finetune_model
+from src.utils.file_utils import call_function_by_path, read_yaml
 
 
 class RunType(str, Enum):
@@ -133,7 +133,9 @@ def build_injection_params(config: dict[str, Any]) -> dict[str, Any] | None:
 
     if run_type == RunType.FULLY_REINITIALIZE:
         # Pass empty dict - WeightInjector will reinitialize ALL layers
-        return {}
+        return {
+            'reinit_from_layer': '0',
+        }
 
     if run_type == RunType.PARTIALLY_REINITIALIZE:
         # Pass reinit_from_layer - WeightInjector will reinitialize tail (from this layer to end)

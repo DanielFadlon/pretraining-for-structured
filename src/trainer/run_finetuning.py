@@ -3,6 +3,8 @@ Finetuning Module
 
 Trains a model using SFT (Supervised Fine-Tuning) with optional weight injection
 for controlled experiments on layer importance and transfer learning.
+
+Supports both CUDA (NVIDIA GPUs) and MPS (Apple Silicon GPUs).
 """
 
 import gc
@@ -14,9 +16,20 @@ from peft import LoraConfig
 from sklearn.model_selection import train_test_split
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from trl import SFTConfig, SFTTrainer
-from trainer.weight_injector import WeightInjector
-from utils import read_yaml, connect_to_hf, set_random_seed
-from trainer.trainer_custom_eval import compute_metrics, preprocess_logits_for_metrics, EvaluationArgKey
+
+from src.trainer.weight_injector import WeightInjector
+from src.utils import read_yaml, connect_to_hf, set_random_seed
+from src.utils import (
+    get_device_type,
+    get_torch_dtype,
+    get_training_precision_args,
+    get_optimizer,
+    supports_quantization,
+    clear_memory_cache,
+    print_device_info,
+    DeviceType,
+)
+from src.trainer.trainer_custom_eval import compute_metrics, preprocess_logits_for_metrics, EvaluationArgKey
 
 def finetune_model(
     data_files: dict[Split, str],
@@ -59,6 +72,15 @@ def finetune_model(
 
     connect_to_hf()
     set_random_seed(seed)
+
+    # Detect and display device info
+    device_type = get_device_type()
+    print_device_info()
+
+    # Check quantization support
+    if should_quant_to_4bit and not supports_quantization(device_type):
+        print(f"Warning: 4-bit quantization is not supported on {device_type.value}. Disabling quantization.")
+        should_quant_to_4bit = False
 
     training_args = _load_training_args(training_args_yml_path)
     evaluation_args = _load_evaluation_args(evaluation_args_yml_path) if should_evaluate else {}
@@ -213,12 +235,14 @@ def _load_model_and_tokenizer(
     training_args: dict[str, Any],
 ) -> Tuple[Any, Any, LoraConfig | None]:
     """Load model and tokenizer with optional quantization and PEFT."""
+    device_type = get_device_type()
+    torch_dtype = get_torch_dtype(device_type)
 
     bnb_config = BitsAndBytesConfig(
         load_in_4bit=True,
         bnb_4bit_use_double_quant=True,
         bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.bfloat16,
+        bnb_4bit_compute_dtype=torch_dtype,
     ) if should_quant_to_4bit else None
 
     peft_config = None
@@ -227,12 +251,12 @@ def _load_model_and_tokenizer(
     model = AutoModelForCausalLM.from_pretrained(
         pretrained_model_id,
         device_map="auto",
-        torch_dtype=torch.bfloat16,
+        torch_dtype=torch_dtype,
         quantization_config=bnb_config if should_quant_to_4bit else None,
         attn_implementation="eager",
         use_safetensors=True,
     )
-    print(f"Loaded model {'with 4-bit quantization' if should_quant_to_4bit else ''}")
+    print(f"Loaded model {'with 4-bit quantization' if should_quant_to_4bit else ''} (dtype: {torch_dtype})")
 
     # Create PEFT config for training with quantization
     if should_quant_to_4bit:
@@ -289,6 +313,14 @@ def _build_sft_config(
     """Build SFTConfig from training arguments."""
     output_dir = f"{out_cache_dir}/{model_output_dir}" if out_cache_dir else model_output_dir
 
+    # Get device-appropriate settings
+    device_type = get_device_type()
+    precision_args = get_training_precision_args(device_type)
+    default_optimizer = get_optimizer(device_type)
+
+    # TF32 is only enabled on CUDA when using quantization
+    use_tf32 = precision_args['tf32'] and should_quant_to_4bit
+
     return SFTConfig(
         output_dir=output_dir,
         num_train_epochs=training_args.get('num_train_epochs', 5),
@@ -299,15 +331,16 @@ def _build_sft_config(
         gradient_checkpointing_kwargs=training_args.get(
             'gradient_checkpointing_kwargs', {'use_reentrant': False}
         ),
-        optim=training_args.get('optim', 'adamw_torch_fused'),
+        optim=training_args.get('optim', default_optimizer),
         logging_steps=training_args.get('logging_steps', 100),
         save_strategy=training_args.get('eval_strategy', 'epoch'),
         save_steps=training_args.get('eval_steps'),
         eval_strategy=training_args.get('eval_strategy', 'epoch') if should_evaluate else 'no',
         eval_steps=training_args.get('eval_steps') if should_evaluate else None,
         learning_rate=float(training_args.get('learning_rate', 2e-4)),
-        bf16=True,
-        tf32=should_quant_to_4bit,
+        bf16=precision_args['bf16'],
+        fp16=precision_args['fp16'],
+        tf32=use_tf32,
         max_grad_norm=training_args.get('max_grad_norm', 0.3),
         warmup_ratio=training_args.get('warmup_ratio', 0.03),
         weight_decay=training_args.get('weight_decay', 0),
@@ -369,5 +402,5 @@ def _cleanup(
     if should_evaluate and valid_dataset:
         del valid_dataset
 
-    torch.cuda.empty_cache()
+    clear_memory_cache()
     gc.collect()
