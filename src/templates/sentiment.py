@@ -4,7 +4,7 @@ Sentiment Analysis Templates
 Templates for sentiment classification tasks.
 """
 
-from templates.base import BinaryClassificationTemplate, BinaryLabels, create_format_func
+from src.templates.base import BinaryClassificationTemplate, BinaryLabels, create_format_func
 
 
 # =============================================================================

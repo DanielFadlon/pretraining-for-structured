@@ -6,7 +6,7 @@ Templates for tasks with 3+ classes: NLI, question classification, etc.
 
 from typing import Any
 
-from templates.base import NLITemplate, create_format_func
+from src.templates.base import NLITemplate, create_format_func
 
 
 # =============================================================================

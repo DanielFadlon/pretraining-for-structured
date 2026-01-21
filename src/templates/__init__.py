@@ -16,7 +16,7 @@ Usage:
     from templates.binary_classification import bank_one_word_prompt_formatting_func
 """
 
-from templates.base import (
+from src.templates.base import (
     BasePromptTemplate,
     BinaryClassificationTemplate,
     BinaryLabels,
@@ -25,16 +25,15 @@ from templates.base import (
 )
 
 # Import all templates for convenience
-from templates.binary_classification import (
+from src.templates.binary_classification import (
     bank_template,
-    blood_template,
     calhousing_template,
     credit_template,
     heart_template,
     income_template,
 )
-from templates.multi_class import snli_template, trec_template
-from templates.sentiment import sst2_template
+from src.templates.multi_class import snli_template, trec_template
+from src.templates.sentiment import sst2_template
 
 __all__ = [
     # Base classes
