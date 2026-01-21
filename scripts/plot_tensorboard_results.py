@@ -5,9 +5,6 @@ Extracts metrics from TensorBoard event files and saves plots as images.
 
 Usage:
     python scripts/plot_tensorboard_results.py <log_dir> [output_dir]
-
-Example:
-    python scripts/plot_tensorboard_results.py results/full/runs/Jan21_18-54-06_dfadlon-ltmf2na.internal.salesforce.com
 """
 
 import os
