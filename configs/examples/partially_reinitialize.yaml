@@ -1,0 +1,46 @@
+# Partially Reinitialize Configuration
+# Reinitialize only the TAIL of the model (from specified layer to end)
+# Useful for studying which layers contain task-specific vs general knowledge
+#
+# Usage:
+#   python scripts/run_finetuning_script.py configs/examples/partially_reinitialize.yaml output/partial_reinit_model
+
+# === Run Type ===
+run_type: "partially_reinitialize"  # Reinitialize tail layers only
+
+# === Reinitialization Settings ===
+# For a 26-layer model (like Gemma-2B):
+#   reinit_from_layer: 0  → reinitialize all layers (0-25)
+#   reinit_from_layer: 13 → reinitialize last half (13-25)
+#   reinit_from_layer: 20 → reinitialize last 6 layers (20-25)
+#   reinit_from_layer: 25 → reinitialize only last layer (25)
+reinit_from_layer: 16  # Reinitialize layers 16 to end (tail)
+
+# === Required Settings ===
+dataset_dir: "data/my_dataset"
+pretrained_model_id: "google/gemma-3-1b-it"
+training_args_yml_path: "configs/training_args.yaml"
+prompt_template_func_path: "templates.binary_classification:create_prompt"
+
+# === Optional Settings ===
+# Data files (defaults shown)
+train_data_file_name: "train.parquet"
+validation_data_file_name: "valid.parquet"
+
+# Evaluation
+should_evaluate: true
+evaluation_args_yml_path: "configs/evaluation_args.yaml"
+
+# Training subset (use full dataset by default)
+train_set_size:
+  percentage: 1  # Use 100% of training data
+  # n: 1000     # Or specify exact number of samples
+
+# Quantization
+should_quant_to_4bit: false
+
+# Reproducibility
+seed: 42
+
+# Cache directory for checkpoints
+out_cache_dir: null

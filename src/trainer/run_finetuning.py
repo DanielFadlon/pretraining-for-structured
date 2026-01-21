@@ -10,7 +10,7 @@ from typing import Any, Callable, Tuple
 
 import torch
 from datasets import Dataset, Split, load_dataset
-from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training
+from peft import LoraConfig
 from sklearn.model_selection import train_test_split
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from trl import SFTConfig, SFTTrainer
@@ -26,7 +26,6 @@ def finetune_model(
     training_args_yml_path: str,
     injection_params: dict[str, Any] | None,
     evaluation_args_yml_path: str | None = None,
-    peft_model_id_or_path: str | None = None,
     should_quant_to_4bit: bool = False,
     dataset_type: str = "parquet",
     should_evaluate: bool = True,
@@ -45,13 +44,12 @@ def finetune_model(
         training_args_yml_path: Path to training arguments YAML file
         injection_params: Weight injection configuration or None to disable.
             Expected keys:
-                - 'layers_names': List of layer indices to reinitialize (e.g., ['0', '1', '15'])
-                - 'use_same_std': If True, use parameter's original STD; if False, use constant 0.02
+                - 'reinit_from_layer': Starting layer for tail reinitialization.
+                    If None or not provided: reinitialize ALL layers (full mode)
+                    If int: reinitialize from that layer to the end (tail mode)
         evaluation_args_yml_path: Path to evaluation arguments YAML (required if should_evaluate=True)
-        peft_model_id_or_path: Path to existing PEFT model for continued training
-        should_quant_to_4bit: Whether to use 4-bit quantization
+        should_quant_to_4bit: Whether to use 4-bit quantization (uses LoRA when True)
         dataset_type: Dataset format ("parquet", "csv", etc.)
-        is_continual_training: Whether to resume from checkpoint
         should_evaluate: Whether to run evaluation during training
         train_set_size: Dict with 'percentage' (0-1) or 'n' (count) for subset sampling
         seed: Random seed for reproducibility
@@ -78,7 +76,6 @@ def finetune_model(
     # Load model and tokenizer
     model, tokenizer, peft_config = _load_model_and_tokenizer(
         pretrained_model_id=pretrained_model_id,
-        peft_model_id_or_path=peft_model_id_or_path,
         should_quant_to_4bit=should_quant_to_4bit,
         training_args=training_args,
     )
@@ -217,7 +214,6 @@ def _slice_dataset(
 
 def _load_model_and_tokenizer(
     pretrained_model_id: str,
-    peft_model_id_or_path: str | None,
     should_quant_to_4bit: bool,
     training_args: dict[str, Any],
 ) -> Tuple[Any, Any, LoraConfig | None]:
@@ -232,49 +228,30 @@ def _load_model_and_tokenizer(
 
     peft_config = None
 
-    if peft_model_id_or_path:
-        # Load base model + PEFT for continued training
-        base_model = AutoModelForCausalLM.from_pretrained(
-            pretrained_model_id,
-            quantization_config=bnb_config,
-            device_map="auto",
-            use_cache=False,
-        )
-        base_model = prepare_model_for_kbit_training(base_model)
+    # Load model
+    model = AutoModelForCausalLM.from_pretrained(
+        pretrained_model_id,
+        device_map="auto",
+        torch_dtype=torch.bfloat16,
+        quantization_config=bnb_config if should_quant_to_4bit else None,
+        attn_implementation="eager",
+        use_safetensors=True,
+    )
+    print(f"Loaded model {'with 4-bit quantization' if should_quant_to_4bit else ''}")
 
-        model = PeftModel.from_pretrained(
-            model=base_model,
-            model_id=peft_model_id_or_path,
-            is_trainable=True,
+    # Create PEFT config for training with quantization
+    if should_quant_to_4bit:
+        peft_config = LoraConfig(
+            lora_alpha=training_args.get('lora_alpha', 128),
+            r=training_args.get('lora_rank', 256),
+            lora_dropout=training_args.get('lora_dropout', 0.05),
+            bias="none",
+            target_modules=training_args.get('target_modules', [
+                "q_proj", "k_proj", "v_proj", "o_proj",
+                "gate_proj", "up_proj", "down_proj",
+            ]),
+            task_type="CAUSAL_LM",
         )
-        print("Loaded PEFT checkpoint for continued training")
-        model.print_trainable_parameters()
-    else:
-        # Load fresh model
-        model = AutoModelForCausalLM.from_pretrained(
-            pretrained_model_id,
-            device_map="auto",
-            torch_dtype=torch.bfloat16,
-            quantization_config=bnb_config,
-            use_cache=False,
-            attn_implementation="eager",
-            use_safetensors=True,
-        )
-        print(f"Loaded model {'with 4-bit quantization' if should_quant_to_4bit else ''}")
-
-        # Create PEFT config for new training with quantization
-        if should_quant_to_4bit:
-            peft_config = LoraConfig(
-                lora_alpha=training_args.get('lora_alpha', 128),
-                r=training_args.get('lora_rank', 256),
-                lora_dropout=training_args.get('lora_dropout', 0.05),
-                bias="none",
-                target_modules=training_args.get('target_modules', [
-                    "q_proj", "k_proj", "v_proj", "o_proj",
-                    "gate_proj", "up_proj", "down_proj",
-                ]),
-                task_type="CAUSAL_LM",
-            )
 
     tokenizer = AutoTokenizer.from_pretrained(pretrained_model_id)
     tokenizer.pad_token = tokenizer.eos_token
@@ -286,20 +263,18 @@ def _load_model_and_tokenizer(
 
 
 def _apply_weight_injection(model: Any, injection_params: dict[str, Any]) -> None:
-    """Apply weight injection to selected layers."""
-    layers_names = injection_params.get('layers_names')
-    if not layers_names:
-        raise ValueError("injection_params must include 'layers_names'")
+    """
+    Apply weight injection to reinitialize layers.
 
-    use_same_std = injection_params.get('use_same_std', False)
+    Args:
+        model: The model to reinitialize
+        injection_params: Dict with optional 'reinit_from_layer' key.
+            - If 'reinit_from_layer' is None or not provided: reinitialize ALL layers
+            - If 'reinit_from_layer' is an int: reinitialize from that layer to the end (tail)
+    """
+    reinit_from_layer = injection_params.get('reinit_from_layer')
 
-    print(f"Injecting weights into layers: {layers_names}")
-    print(f"Using {'same STD per parameter' if use_same_std else 'constant STD (0.02)'}")
-
-    injector = WeightInjector(
-        layers_names=layers_names,
-        use_same_std=use_same_std,
-    )
+    injector = WeightInjector(reinit_from_layer=reinit_from_layer)
     injector.inject(model)
 
     # Log reinitialized parameters

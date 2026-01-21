@@ -1,0 +1,37 @@
+# Regular Finetuning Configuration
+# Standard finetuning without any weight reinitialization
+#
+# Usage:
+#   python scripts/run_finetuning_script.py configs/examples/regular_finetuning.yaml output/regular_model
+
+# === Run Type ===
+run_type: "regular"  # No weight reinitialization
+
+# === Required Settings ===
+dataset_dir: "data/my_dataset"
+pretrained_model_id: "google/gemma-3-1b-it"
+training_args_yml_path: "configs/training_args.yaml"
+prompt_template_func_path: "templates.binary_classification.create_prompt"
+
+# === Optional Settings ===
+# Data files (defaults shown)
+train_data_file_name: "train.parquet"
+validation_data_file_name: "valid.parquet"
+
+# Evaluation
+should_evaluate: true
+evaluation_args_yml_path: "configs/evaluation_args.yaml"
+
+# Training subset (use full dataset by default)
+train_set_size:
+  percentage: 1  # Use 100% of training data
+  # n: 1000     # Or specify exact number of samples
+
+# Quantization
+should_quant_to_4bit: false
+
+# Reproducibility
+seed: 42
+
+# Cache directory for checkpoints
+out_cache_dir: null

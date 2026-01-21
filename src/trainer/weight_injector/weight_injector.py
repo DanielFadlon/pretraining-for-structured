@@ -2,33 +2,75 @@
 Weight Injector Module
 
 Reinitializes selected layers in a model with random weights.
+Supports full reinitialization (all layers) or tail reinitialization (from a specific layer to the end).
 """
 
 from typing import List
 import torch
 
+
 class WeightInjector:
     """
     Reinitializes weights of selected layers in a model.
 
+    Modes:
+        - Full reinitialization: When reinit_from_layer is None, all layers are reinitialized.
+        - Tail reinitialization: When reinit_from_layer is specified, layers from that index
+          to the last layer (inclusive) are reinitialized.
+
     Args:
-        layers_names: List of layer indices to reinitialize (e.g., ['0', '1', '15'])
-        use_same_std: If True, use each parameter's original STD for reinitialization.
-                      If False, use a constant DEFAULT_STD (0.02).
+        reinit_from_layer: Starting layer index for tail reinitialization.
+                          If None, all layers will be reinitialized (full mode).
     """
 
-    def __init__(
-        self,
-        layers_names: List[str]
-    ) -> None:
-        if not layers_names:
-            raise ValueError("layers_names must be a non-empty list of layer indices")
-
-        self.layers_names = layers_names
+    def __init__(self, reinit_from_layer: int | None = None) -> None:
+        self.reinit_from_layer = reinit_from_layer
+        self.layers_names: List[str] = []  # Will be populated during inject()
 
     def inject(self, model) -> None:
         """Reinitialize the selected layers in the model."""
+        # Auto-detect number of layers from model
+        num_layers = self._get_num_layers(model)
+        # Calculate which layers to reinitialize
+        self.layers_names = self._calculate_layers_to_reinit(num_layers)
+
+        print(f"Total model layers: {num_layers}")
+        print(f"Reinitializing layers: {self.layers_names}")
+
         self._reinitialize_selected_layers(model)
+
+    def _get_num_layers(self, model) -> int:
+        """Get the number of transformer layers from the model."""
+        # Try common attribute names for layer count
+        if hasattr(model, 'config'):
+            if hasattr(model.config, 'num_hidden_layers'):
+                return model.config.num_hidden_layers
+            if hasattr(model.config, 'n_layer'):
+                return model.config.n_layer
+
+        # Fallback: count layers directly
+        if hasattr(model, 'model') and hasattr(model.model, 'layers'):
+            return len(model.model.layers)
+
+        raise ValueError("Could not determine number of layers in model")
+
+    def _calculate_layers_to_reinit(self, num_layers: int) -> List[str]:
+        """
+        Calculate which layers to reinitialize.
+
+        - If reinit_from_layer is None: reinitialize all layers (0 to num_layers-1)
+        - Otherwise: reinitialize tail (reinit_from_layer to num_layers-1)
+        """
+        if self.reinit_from_layer is None:
+            # Full reinitialization: all layers
+            start_layer = 0
+            print("Mode: FULL reinitialization (all layers)")
+        else:
+            # Tail reinitialization: from specified layer to end
+            start_layer = self.reinit_from_layer
+            print(f"Mode: TAIL reinitialization (from layer {start_layer} to end)")
+
+        return [str(i) for i in range(start_layer, num_layers)]
 
     def _reinitialize_selected_layers(self, model) -> None:
         """
