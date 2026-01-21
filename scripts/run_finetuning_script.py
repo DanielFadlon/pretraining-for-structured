@@ -4,7 +4,7 @@ Finetuning Script
 Finetune a model with optional weight injection on selected layers.
 
 Usage:
-    python run_finetuning_script.py <config.yaml> <output_dir> [cache_dir]
+    python scripts/run_finetuning_script.py <config.yaml> <output_dir> [cache_dir]
 
 Run Types (set via 'run_type' in config):
     - "regular" - Standard finetuning without weight reinitialization
