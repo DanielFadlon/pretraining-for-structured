@@ -84,11 +84,6 @@ def finetune_model(
     if injection_params:
         _apply_weight_injection(model, injection_params)
 
-    # Apply layer range training if configured
-    train_layer_range = training_args.get("train_layer_range")
-    if train_layer_range:
-        _configure_trainable_layers(model, train_layer_range)
-
     # Build training configuration
     sft_config = _build_sft_config(
         model_output_dir=model_output_dir,
@@ -281,29 +276,6 @@ def _apply_weight_injection(model: Any, injection_params: dict[str, Any]) -> Non
     for name, param in model.named_parameters():
         if param.requires_grad:
             print(f"  {name}: mean={param.data.mean():.6f}, std={param.data.std():.6f}")
-
-
-def _configure_trainable_layers(model: Any, layer_range: dict[str, int]) -> None:
-    """Configure which layers are trainable based on range."""
-    # Freeze all parameters first
-    for param in model.parameters():
-        param.requires_grad = False
-
-    start = layer_range.get('start', 0)
-    end = layer_range.get('end', -1)
-
-    print(f"\nConfiguring trainable layers: {start} to {end}")
-
-    # Unfreeze specified layer range
-    layers = model.model.layers  # For LLaMA/Gemma architecture
-    for i in range(start, end + 1):
-        for param in layers[i].parameters():
-            param.requires_grad = True
-
-    # Log trainable parameters
-    for name, param in model.named_parameters():
-        if param.requires_grad:
-            print(f"  Trainable: {name}")
 
 
 def _build_sft_config(
