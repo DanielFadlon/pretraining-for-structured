@@ -5,6 +5,6 @@ from huggingface_hub import login
 
 def connect_to_hf():
     load_dotenv()
-    access_token = os.getenv('ACCESS_TOKEN')
+    access_token = os.getenv('HF_ACCESS_TOKEN')
     login(token=access_token)
 
