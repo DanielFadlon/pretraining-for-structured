@@ -9,18 +9,16 @@
 run_type: "partially_reinitialize"  # Reinitialize tail layers only
 
 # === Reinitialization Settings ===
-# For a 26-layer model (like Gemma-2B):
-#   reinit_from_layer: 0  → reinitialize all layers (0-25)
-#   reinit_from_layer: 13 → reinitialize last half (13-25)
-#   reinit_from_layer: 20 → reinitialize last 6 layers (20-25)
-#   reinit_from_layer: 25 → reinitialize only last layer (25)
-reinit_from_layer: 16  # Reinitialize layers 16 to end (tail)
+# For a 16-layer model (like Gemma-3-1B):
+#   reinit_from_layer: 0  → reinitialize all layers (0-16)
+#   reinit_from_layer: 4 → reinitialize layer 4 to 16 (while keeping layer 0-3 with pretrained weights)
+reinit_from_layer: 4
 
 # === Required Settings ===
-dataset_dir: "data/my_dataset"
+dataset_dir: "data/heart/textual_data"
 pretrained_model_id: "google/gemma-3-1b-it"
 training_args_yml_path: "configs/training_args.yaml"
-prompt_template_func_path: "templates.binary_classification:create_prompt"
+prompt_template_func_path: "src.templates.binary_classification.heart_long_response_prompt_formatting_func"
 
 # === Optional Settings ===
 # Data files (defaults shown)
@@ -29,7 +27,7 @@ validation_data_file_name: "valid.parquet"
 
 # Evaluation
 should_evaluate: true
-evaluation_args_yml_path: "configs/evaluation_args.yaml"
+evaluation_args_yml_path: "configs/evaluation_args/gemma/yes_no_eval_args.yaml"
 
 # Training subset (use full dataset by default)
 train_set_size:
