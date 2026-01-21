@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+
+# IDE
+.idea/
+.vscode/
+.project
+.pydevproject
+.settings/
+
+# Model checkpoints and outputs
+checkpoints/
+outputs/
+models/
+saved_models/
+runs/
+logs/
+tensorboard/
+
+# HuggingFace cache
+.cache/
+*.lock
+
+# Dataset cache
+data/
+datasets/
+
+# Logs
+*.log
+*.out
+*.err
+
+# OS
+.DS_Store
+
+# Secrets and credentials
+.env.local
+.env.*.local
+
+
+# Testing
+.pytest_cache/
