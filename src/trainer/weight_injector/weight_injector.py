@@ -1,80 +1,92 @@
 """
 Weight Injector Module
 
-Reinitializes selected layers in a model with random weights.
-Supports full reinitialization (all layers) or tail reinitialization (from a specific layer to the end).
+Reinitializes selected components of a model with random weights.
+
+Supports two strategies:
+    - LAYERS: Reinitialize transformer layers from a starting index (default 0 = all layers)
+    - FULL: Reinitialize ALL modules in the model using model.apply()
 """
 
+from enum import Enum
 from typing import List
 import torch
 
 
+class ReinitStrategy(str, Enum):
+    """Reinitialization strategies."""
+    LAYERS = "layers"  # Reinitialize specific transformer layers
+    FULL = "full"      # Reinitialize ALL modules via model.apply()
+
+
 class WeightInjector:
     """
-    Reinitializes weights of selected layers in a model.
+    Reinitializes weights of selected components in a model.
 
-    Modes:
-        - Full reinitialization: When reinit_from_layer is None, all layers are reinitialized.
-        - Tail reinitialization: When reinit_from_layer is specified, layers from that index
-          to the last layer (inclusive) are reinitialized.
+    Strategies:
+        - LAYERS: Reinitialize transformer layers from `reinit_from_layer` to end.
+          If reinit_from_layer=0 (default), all transformer layers are reinitialized.
+
+        - FULL: Uses model.apply() to reinitialize ALL modules in the model.
+          Each weight tensor is reinitialized with normal distribution using the same std.
 
     Args:
-        reinit_from_layer: Starting layer index for tail reinitialization.
-                          If None, all layers will be reinitialized (full mode).
+        strategy: ReinitStrategy (LAYERS or FULL)
+        reinit_from_layer: Starting layer index (0-based). Default 0 means all layers.
+                          Only used when strategy=LAYERS.
     """
 
-    def __init__(self, reinit_from_layer: int | None = None) -> None:
+    def __init__(
+        self,
+        strategy: ReinitStrategy,
+        reinit_from_layer: int = 0,
+    ) -> None:
+        self.strategy = strategy
         self.reinit_from_layer = reinit_from_layer
-        self.layers_names: List[str] = []  # Will be populated during inject()
+        self.layers_names: List[str] = []
 
     def inject(self, model) -> None:
-        """Reinitialize the selected layers in the model."""
-        # Auto-detect number of layers from model
-        num_layers = self._get_num_layers(model)
-        # Calculate which layers to reinitialize
-        self.layers_names = self._calculate_layers_to_reinit(num_layers)
+        """Reinitialize the selected components in the model."""
+        if self.strategy == ReinitStrategy.FULL:
+            print("Strategy: FULL (reinitialize all modules via model.apply)")
+            model.apply(self._reinitialize_module)
+        elif self.strategy == ReinitStrategy.LAYERS:
+            num_layers = self._get_num_layers(model)
+            self.layers_names = self._calculate_layers_to_reinit(num_layers)
 
-        print(f"Total model layers: {num_layers}")
-        print(f"Reinitializing layers: {self.layers_names}")
+            print(f"Strategy: LAYERS")
+            print(f"Total model layers: {num_layers}")
+            print(f"Reinitializing transformer layers: {self.layers_names}")
 
-        self._reinitialize_selected_layers(model)
+            self._reinitialize_selected_layers(model)
 
     def _get_num_layers(self, model) -> int:
         """Get the number of transformer layers from the model."""
-        # Try common attribute names for layer count
         if hasattr(model, 'config'):
             if hasattr(model.config, 'num_hidden_layers'):
                 return model.config.num_hidden_layers
             if hasattr(model.config, 'n_layer'):
                 return model.config.n_layer
 
-        # Fallback: count layers directly
         if hasattr(model, 'model') and hasattr(model.model, 'layers'):
             return len(model.model.layers)
 
         raise ValueError("Could not determine number of layers in model")
 
     def _calculate_layers_to_reinit(self, num_layers: int) -> List[str]:
-        """
-        Calculate which layers to reinitialize.
+        """Calculate which layers to reinitialize (from reinit_from_layer to end)."""
+        start_layer = self.reinit_from_layer
 
-        - If reinit_from_layer is None: reinitialize all layers (0 to num_layers-1)
-        - Otherwise: reinitialize tail (reinit_from_layer to num_layers-1)
-        """
-        if self.reinit_from_layer is None:
-            # Full reinitialization: all layers
-            start_layer = 0
-            print("Mode: FULL reinitialization (all layers)")
+        if start_layer == 0:
+            print(f"Reinitializing ALL transformer layers (0 to {num_layers - 1})")
         else:
-            # Tail reinitialization: from specified layer to end
-            start_layer = self.reinit_from_layer
-            print(f"Mode: TAIL reinitialization (from layer {start_layer} to end)")
+            print(f"Reinitializing layers {start_layer} to {num_layers - 1}")
 
         return [str(i) for i in range(start_layer, num_layers)]
 
     def _reinitialize_selected_layers(self, model) -> None:
         """
-        Reinitializes specific layers in the model by their indices.
+        Reinitializes specific transformer layers in the model by their indices.
 
         Assumes each layer has the following modules:
             - self_attention: q_proj, k_proj, v_proj, o_proj
@@ -87,7 +99,7 @@ class WeightInjector:
 
         for name, module in model.named_modules():
             if name in selected_module_names:
-                print(f"Reinitializing layer: {name}")
+                print(f"Reinitializing: {name}")
                 self._reinitialize_module(module)
 
     def _build_module_mapping(self) -> dict:
@@ -114,23 +126,24 @@ class WeightInjector:
         return mapping
 
     def _reinitialize_module(self, module) -> None:
-        """Reinitialize weights and biases of a module."""
+        """
+        Reinitialize weights and biases of a module.
+        Uses same std as original weights.
+        """
         if hasattr(module, 'weight') and module.weight is not None:
             self._reinitialize_tensor(module.weight)
 
         if hasattr(module, 'bias') and module.bias is not None:
-            # Biases are always initialized to zeros
-            if module.bias.dtype in [torch.float32, torch.float64, torch.float16, torch.bfloat16]:
-                torch.nn.init.zeros_(module.bias)
+            self._reinitialize_tensor(module.bias)
 
     def _reinitialize_tensor(self, tensor: torch.Tensor) -> None:
-        """Reinitialize a tensor with normal distribution."""
-        supported_dtypes = [torch.float32, torch.float64, torch.float16, torch.bfloat16]
+        """
+        Reinitialize a tensor with normal distribution using same std as original.
+        """
+        if not torch.is_floating_point(tensor):
+            return
 
-        if tensor.dtype in supported_dtypes:
-            std = tensor.data.std().item()
-            torch.nn.init.normal_(tensor, mean=0.0, std=std)
-        elif tensor.dtype == torch.int8 and hasattr(tensor, 'data_fp32'):
-            # Handle quantized int8 weights
-            std = tensor.data_fp32.std().item()
-            torch.nn.init.normal_(tensor.data_fp32, mean=0.0, std=std)
+        param_std = tensor.data.std().item()
+
+        with torch.no_grad():
+            torch.nn.init.normal_(tensor, mean=0.0, std=param_std)

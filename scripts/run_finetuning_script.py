@@ -1,15 +1,15 @@
 """
 Finetuning Script
 
-Finetune a model with optional weight injection on selected layers.
+Finetune a model with optional weight reinitialization.
 
 Usage:
     python scripts/run_finetuning_script.py <config.yaml> <output_dir> [cache_dir]
 
 Run Types (set via 'run_type' in config):
-    - "regular" - Standard finetuning without weight reinitialization
-    - "fully_reinitialize" - Reinitialize ALL transformer layers (auto-detected)
-    - "partially_reinitialize" - Reinitialize tail: from 'reinit_from_layer' to end
+    - "regular"          - Standard finetuning without weight reinitialization
+    - "reinit_layers"    - Reinitialize transformer layers from 'reinit_from_layer' (default 0 = all layers)
+    - "full_reinitialize" - Reinitialize ALL modules via model.apply() (equivalent to training from scratch)
 """
 
 import os
@@ -28,9 +28,9 @@ from src.utils.file_utils import call_function_by_path, read_yaml
 
 class RunType(str, Enum):
     """Enum for different finetuning run types."""
-    REGULAR = "regular"                             # Standard finetuning, no reinitialization
-    FULLY_REINITIALIZE = "fully_reinitialize"       # Reinitialize all layers (auto-detected)
-    PARTIALLY_REINITIALIZE = "partially_reinitialize"  # Reinitialize tail (from reinit_from_layer to end)
+    REGULAR = "regular"                    # Standard finetuning, no reinitialization
+    REINIT_LAYERS = "reinit_layers"        # Reinitialize transformer layers (from reinit_from_layer, default 0)
+    FULL_REINITIALIZE = "full_reinitialize"  # Reinitialize ALL modules via model.apply()
 
 
 # Required configuration values
@@ -46,8 +46,8 @@ DEFAULTS = {
     'train_data_file_name': 'train.parquet',
     'validation_data_file_name': 'valid.parquet',
     'should_quant_to_4bit': False,
-    'run_type': RunType.REGULAR.value,  # "regular", "fully_reinitialize", "partially_reinitialize"
-    'reinit_from_layer': None,          # Required for PARTIALLY_REINITIALIZE (starting layer for tail reinit)
+    'run_type': RunType.REGULAR.value,
+    'reinit_from_layer': 0,              # Default: reinitialize from layer 0 (all layers)
     'evaluation_args_yml_path': None,
     'should_evaluate': True,
     'train_set_size': {'percentage': 1},
@@ -81,18 +81,16 @@ def validate_config(config: dict[str, Any]) -> None:
     if run_type_value not in valid_run_types:
         raise ValueError(
             f"run_type must be one of {valid_run_types} "
-            f"('regular', 'fully_reinitialize', 'partially_reinitialize')"
+            f"('regular', 'reinit_layers', 'full_reinitialize')"
         )
 
     run_type = RunType(run_type_value)
 
-    # Validate PARTIALLY_REINITIALIZE requirements
-    if run_type == RunType.PARTIALLY_REINITIALIZE:
-        reinit_from_layer = config.get('reinit_from_layer')
-        if reinit_from_layer is None:
-            raise ValueError("reinit_from_layer is required for 'partially_reinitialize' run type")
+    # Validate reinit_from_layer if provided
+    if run_type in [RunType.REINIT_LAYERS]:
+        reinit_from_layer = config.get('reinit_from_layer', 0)
         if not isinstance(reinit_from_layer, int) or reinit_from_layer < 0:
-            raise ValueError("reinit_from_layer must be a non-negative integer (starting layer index for tail reinit)")
+            raise ValueError("reinit_from_layer must be a non-negative integer")
 
 
 def load_config(yaml_path: str) -> dict[str, Any]:
@@ -123,24 +121,24 @@ def build_injection_params(config: dict[str, Any]) -> dict[str, Any] | None:
     Build injection_params based on run_type.
 
     Returns:
-        None for REGULAR run type, or dict with 'reinit_from_layer' for reinitialization.
-        The WeightInjector handles layer detection and calculation internally.
+        None for REGULAR run type, or dict with reinitialization settings.
     """
     run_type = RunType(config['run_type'])
 
     if run_type == RunType.REGULAR:
         return None
 
-    if run_type == RunType.FULLY_REINITIALIZE:
-        # Pass empty dict - WeightInjector will reinitialize ALL layers
-        return {
-            'reinit_from_layer': '0',
-        }
-
-    if run_type == RunType.PARTIALLY_REINITIALIZE:
-        # Pass reinit_from_layer - WeightInjector will reinitialize tail (from this layer to end)
+    if run_type == RunType.REINIT_LAYERS:
+        # Reinitialize only transformer layers (from reinit_from_layer to end)
         return {
             'reinit_from_layer': config['reinit_from_layer'],
+            'full_reinit': False,
+        }
+
+    if run_type == RunType.FULL_REINITIALIZE:
+        # Reinitialize ALL modules via model.apply()
+        return {
+            'full_reinit': True,
         }
 
     return None
@@ -197,8 +195,16 @@ def main() -> None:
     print(f"Config:     {yaml_path}")
     print(f"Output dir: {model_output_dir}")
     print(f"Run type:   {run_type.value}")
-    if run_type == RunType.PARTIALLY_REINITIALIZE:
-        print(f"Reinit from layer: {config.get('reinit_from_layer')} (tail)")
+
+    if run_type == RunType.REINIT_LAYERS:
+        layer = config['reinit_from_layer']
+        if layer == 0:
+            print(f"Reinit:     All transformer layers (from layer 0)")
+        else:
+            print(f"Reinit:     Layers {layer} to end")
+    elif run_type == RunType.FULL_REINITIALIZE:
+        print(f"Reinit:     FULL (all modules via model.apply)")
+
     if cache_dir:
         print(f"Cache dir:  {cache_dir}")
     print(f"{'='*60}\n")

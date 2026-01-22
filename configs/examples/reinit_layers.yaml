@@ -1,18 +1,21 @@
-# Partially Reinitialize Configuration
-# Reinitialize only the TAIL of the model (from specified layer to end)
-# Useful for studying which layers contain task-specific vs general knowledge
+# Reinit Layers Configuration
+# Reinitialize transformer layers from a specified starting layer to the end.
+# Useful for studying which layers contain task-specific vs general knowledge.
 #
 # Usage:
-#   python scripts/run_finetuning_script.py configs/examples/partially_reinitialize.yaml output/partial_reinit_model
+#   python scripts/run_finetuning_script.py configs/examples/reinit_layers.yaml output/reinit_layers_model
 
-# === Run Type ===
-run_type: "partially_reinitialize"  # Reinitialize tail layers only
+# === Reinit Strategy ===
+reinit_strategy: "layers"  # Reinitialize transformer layers only
 
 # === Reinitialization Settings ===
-# For a 16-layer model (like Gemma-3-1B):
-#   reinit_from_layer: 0  → reinitialize all layers (0-16)
-#   reinit_from_layer: 4 → reinitialize layer 4 to 16 (while keeping layer 0-3 with pretrained weights)
-reinit_from_layer: 4
+# For a 26-layer model (like Gemma-3-1B):
+#   reinit_from_layer: 0   → reinitialize all layers (0-25)
+#   reinit_from_layer: 10  → reinitialize layers 10-25 (keep layers 0-9 pretrained)
+#   reinit_from_layer: 20  → reinitialize layers 20-25 (keep layers 0-19 pretrained)
+#
+# Default is 0 (all layers).
+reinit_from_layer: 10
 
 # === Required Settings ===
 dataset_dir: "data/heart/textual_data"

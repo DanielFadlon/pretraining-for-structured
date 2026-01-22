@@ -1,1 +1,1 @@
-from .weight_injector import WeightInjector
+from .weight_injector import WeightInjector, ReinitStrategy

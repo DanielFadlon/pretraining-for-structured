@@ -4,8 +4,8 @@
 # Usage:
 #   python scripts/run_finetuning_script.py configs/examples/regular_finetuning.yaml output/regular_model
 
-# === Run Type ===
-run_type: "regular"  # No weight reinitialization
+# === Reinit Strategy ===
+# reinit_strategy: null  # No reinitialization (default, can be omitted)
 
 # === Required Settings ===
 dataset_dir: "data/heart/textual_data"

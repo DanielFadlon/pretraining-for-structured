@@ -17,7 +17,7 @@ from sklearn.model_selection import train_test_split
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from trl import SFTConfig, SFTTrainer
 
-from src.trainer.weight_injector import WeightInjector
+from src.trainer.weight_injector import WeightInjector, ReinitStrategy
 from src.utils import read_yaml, connect_to_hf, set_random_seed
 from src.utils import (
     get_device_type,
@@ -283,17 +283,21 @@ def _load_model_and_tokenizer(
 
 def _apply_weight_injection(model: Any, injection_params: dict[str, Any]) -> None:
     """
-    Apply weight injection to reinitialize layers.
+    Apply weight injection to reinitialize model components.
 
     Args:
         model: The model to reinitialize
-        injection_params: Dict with optional 'reinit_from_layer' key.
-            - If 'reinit_from_layer' is None or not provided: reinitialize ALL layers
-            - If 'reinit_from_layer' is an int: reinitialize from that layer to the end (tail)
+        injection_params: Dict with reinitialization settings:
+            - 'strategy': ReinitStrategy (LAYERS or FULL)
+            - 'reinit_from_layer': Starting layer index (only for LAYERS strategy)
     """
-    reinit_from_layer = injection_params.get('reinit_from_layer')
+    strategy = injection_params.get('strategy')
+    reinit_from_layer = injection_params.get('reinit_from_layer', 0)
 
-    injector = WeightInjector(reinit_from_layer=reinit_from_layer)
+    injector = WeightInjector(
+        strategy=strategy,
+        reinit_from_layer=reinit_from_layer,
+    )
     injector.inject(model)
 
     # Log reinitialized parameters

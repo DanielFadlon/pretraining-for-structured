@@ -1,12 +1,12 @@
-# Fully Reinitialize Configuration
-# Reinitialize ALL transformer layers before finetuning
-# (simulates training from scratch with pretrained architecture)
+# Full Reinitialize Configuration
+# Reinitialize ALL modules via model.apply() (equivalent to training from scratch)
+# Uses same std as original weights for each tensor.
 #
 # Usage:
 #   python scripts/run_finetuning_script.py configs/examples/fully_reinitialize.yaml output/fully_reinit_model
 
-# === Run Type ===
-run_type: "fully_reinitialize"  # Reinitialize ALL layers (auto-detected from model)
+# === Reinit Strategy ===
+reinit_strategy: "full"  # Reinitialize ALL modules via model.apply()
 
 # === Required Settings ===
 dataset_dir: "data/heart/textual_data"
