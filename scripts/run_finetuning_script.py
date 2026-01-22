@@ -6,15 +6,14 @@ Finetune a model with optional weight reinitialization.
 Usage:
     python scripts/run_finetuning_script.py <config.yaml> <output_dir> [cache_dir]
 
-Run Types (set via 'run_type' in config):
-    - "regular"          - Standard finetuning without weight reinitialization
-    - "reinit_layers"    - Reinitialize transformer layers from 'reinit_from_layer' (default 0 = all layers)
-    - "full_reinitialize" - Reinitialize ALL modules via model.apply() (equivalent to training from scratch)
+Reinit Strategies (set via 'reinit_strategy' in config):
+    - null (or omitted) - Standard finetuning without weight reinitialization
+    - "layers"          - Reinitialize transformer layers from 'reinit_from_layer' (default 0 = all)
+    - "full"            - Reinitialize ALL modules via model.apply()
 """
 
 import os
 import sys
-from enum import Enum
 from typing import Any
 
 # Add project root to path
@@ -23,14 +22,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from datasets import Split
 
 from src.trainer.run_finetuning import finetune_model
+from src.trainer.weight_injector import ReinitStrategy
 from src.utils.file_utils import call_function_by_path, read_yaml
-
-
-class RunType(str, Enum):
-    """Enum for different finetuning run types."""
-    REGULAR = "regular"                    # Standard finetuning, no reinitialization
-    REINIT_LAYERS = "reinit_layers"        # Reinitialize transformer layers (from reinit_from_layer, default 0)
-    FULL_REINITIALIZE = "full_reinitialize"  # Reinitialize ALL modules via model.apply()
 
 
 # Required configuration values
@@ -46,7 +39,7 @@ DEFAULTS = {
     'train_data_file_name': 'train.parquet',
     'validation_data_file_name': 'valid.parquet',
     'should_quant_to_4bit': False,
-    'run_type': RunType.REGULAR.value,
+    'reinit_strategy': None,             # None = no reinitialization, "layers" or "full"
     'reinit_from_layer': 0,              # Default: reinitialize from layer 0 (all layers)
     'evaluation_args_yml_path': None,
     'should_evaluate': True,
@@ -75,22 +68,20 @@ def validate_config(config: dict[str, Any]) -> None:
         if required_value not in config:
             raise ValueError(f"Config must specify '{required_value}'")
 
-    # Validate run_type
-    run_type_value = config.get('run_type', RunType.REGULAR.value)
-    valid_run_types = [rt.value for rt in RunType]
-    if run_type_value not in valid_run_types:
-        raise ValueError(
-            f"run_type must be one of {valid_run_types} "
-            f"('regular', 'reinit_layers', 'full_reinitialize')"
-        )
+    # Validate reinit_strategy if provided
+    reinit_strategy = config.get('reinit_strategy')
+    if reinit_strategy is not None:
+        valid_strategies = [s.value for s in ReinitStrategy]
+        if reinit_strategy not in valid_strategies:
+            raise ValueError(
+                f"reinit_strategy must be one of {valid_strategies} or null"
+            )
 
-    run_type = RunType(run_type_value)
-
-    # Validate reinit_from_layer if provided
-    if run_type in [RunType.REINIT_LAYERS]:
-        reinit_from_layer = config.get('reinit_from_layer', 0)
-        if not isinstance(reinit_from_layer, int) or reinit_from_layer < 0:
-            raise ValueError("reinit_from_layer must be a non-negative integer")
+        # Validate reinit_from_layer for LAYERS strategy
+        if reinit_strategy == ReinitStrategy.LAYERS.value:
+            reinit_from_layer = config.get('reinit_from_layer', 0)
+            if not isinstance(reinit_from_layer, int) or reinit_from_layer < 0:
+                raise ValueError("reinit_from_layer must be a non-negative integer")
 
 
 def load_config(yaml_path: str) -> dict[str, Any]:
@@ -118,27 +109,25 @@ def create_prompt_formatter(prompt_template_func_path: str):
 
 def build_injection_params(config: dict[str, Any]) -> dict[str, Any] | None:
     """
-    Build injection_params based on run_type.
+    Build injection_params based on reinit_strategy.
 
     Returns:
-        None for REGULAR run type, or dict with reinitialization settings.
+        None if no reinitialization, or dict with strategy and settings.
     """
-    run_type = RunType(config['run_type'])
+    reinit_strategy = config.get('reinit_strategy')
 
-    if run_type == RunType.REGULAR:
+    if reinit_strategy is None:
         return None
 
-    if run_type == RunType.REINIT_LAYERS:
-        # Reinitialize only transformer layers (from reinit_from_layer to end)
+    if reinit_strategy == ReinitStrategy.LAYERS.value:
         return {
+            'strategy': ReinitStrategy.LAYERS,
             'reinit_from_layer': config['reinit_from_layer'],
-            'full_reinit': False,
         }
 
-    if run_type == RunType.FULL_REINITIALIZE:
-        # Reinitialize ALL modules via model.apply()
+    if reinit_strategy == ReinitStrategy.FULL.value:
         return {
-            'full_reinit': True,
+            'strategy': ReinitStrategy.FULL,
         }
 
     return None
@@ -160,7 +149,7 @@ def run_training(config: dict[str, Any], model_output_dir: str, cache_dir: str |
     # Create prompt formatter
     prompt_formatter = create_prompt_formatter(config['prompt_template_func_path'])
 
-    # Build injection params based on run_type
+    # Build injection params based on reinit_strategy
     injection_params = build_injection_params(config)
 
     # Override cache_dir from CLI if provided
@@ -187,23 +176,24 @@ def main() -> None:
     yaml_path, model_output_dir, cache_dir = parse_args()
 
     config = load_config(yaml_path)
-    run_type = RunType(config['run_type'])
+    reinit_strategy = config.get('reinit_strategy')
 
     print(f"\n{'='*60}")
     print(f"Finetuning Script - PID: {os.getpid()}")
     print(f"{'='*60}")
     print(f"Config:     {yaml_path}")
     print(f"Output dir: {model_output_dir}")
-    print(f"Run type:   {run_type.value}")
 
-    if run_type == RunType.REINIT_LAYERS:
+    if reinit_strategy is None:
+        print(f"Reinit:     None (regular finetuning)")
+    elif reinit_strategy == ReinitStrategy.LAYERS.value:
         layer = config['reinit_from_layer']
         if layer == 0:
-            print(f"Reinit:     All transformer layers (from layer 0)")
+            print(f"Reinit:     LAYERS (all transformer layers)")
         else:
-            print(f"Reinit:     Layers {layer} to end")
-    elif run_type == RunType.FULL_REINITIALIZE:
-        print(f"Reinit:     FULL (all modules via model.apply)")
+            print(f"Reinit:     LAYERS (from layer {layer} to end)")
+    elif reinit_strategy == ReinitStrategy.FULL.value:
+        print(f"Reinit:     FULL (all modules)")
 
     if cache_dir:
         print(f"Cache dir:  {cache_dir}")
