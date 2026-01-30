@@ -1,0 +1,4 @@
+last_prompt_token_id: 30
+positive_token_id: 7566
+negative_token_id: 2360
+k: 1000

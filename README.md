@@ -1,1 +1,97 @@
 # pretraining-for-structured
+
+## Methods
+
+This section describes the experimental methods available in this project and how to execute them.
+
+**Note:** experiments in this repo are highly controlled by the YAML configuration passed into the training script. Start by looking at the example configs in `configs/examples/`, then modify the fields you need (model, reinit strategy, train size, etc.).
+
+---
+
+### 1. Pretraining vs Full Reinitialization
+
+Compare the effect of pretrained weights vs training from scratch using random re-initialization.
+
+#### 1.a. Regular Finetuning
+
+Standard finetuning (that preserves pretrained weights). The model starts with knowledge learned during pretraining.
+
+```bash
+python scripts/run_finetuning_script.py configs/examples/regular_finetuning.yaml output/pt_llama
+```
+
+**Key config settings:**
+```yaml
+pretrained_model_id: "meta-llama/Llama-3.2-1B-Instruct"
+```
+
+#### 1.b. Full Reinitialization
+
+Reinitialize all weights with random values from a zero-mean normal distribution (same standard deviation as original), so training begins from scratch.
+
+```bash
+python scripts/run_finetuning_script.py configs/examples/fully_reinitialize.yaml output/fully_reinit_model
+```
+
+**Key config settings:**
+```yaml
+reinit_strategy: "full"  # Reinitialize ALL modules via model.apply()
+```
+
+---
+
+### 2. Training Set Size
+
+Analyze performance as a function of training data size.
+
+#### 2.a. Execute Different Train Sizes
+
+Control the amount of training data using either **a ratio** (`percentage`) or **an exact number of examples** (`n`).
+
+This can be combined with any other training configuration (regular finetuning, full reinitialization, or layer reinitialization) by setting `train_set_size` in the YAML you already use.
+
+**Config for percentage-based sizing:**
+```yaml
+train_set_size:
+  percentage: 0.5  # Use 50% of training data
+```
+
+**Config for exact sample count:**
+```yaml
+train_set_size:
+  n: 1000  # Use exactly 1000 samples
+```
+
+---
+
+### 3. Layer-wise Analysis
+
+Study the effect of **pretrained layers** by keeping a prefix (“head”) of the model pretrained, while reinitializing the remaining layers (“tail”) and finetuning.
+
+#### 3.a. Reinitialize Layers from a Specified Layer to the End
+
+Reinitialize transformer layers from a starting layer through the final layer (the “tail” of the model). Layers before `reinit_from_layer` remain pretrained (the “head”).
+
+```bash
+python scripts/run_finetuning_script.py configs/examples/reinit_layers.yaml output/reinit_layers_model
+```
+
+**Key config settings:**
+```yaml
+reinit_strategy: "layers"  # Reinitialize transformer layers only
+reinit_from_layer: 10      # Reinitialize from layer 10 to the end
+```
+
+**How to think about layer numbering (for a model with `num_hidden_layers = N`):**
+| `reinit_from_layer` | Layers Reinitialized | Layers Kept Pretrained |
+|---------------------|----------------------|------------------------|
+| 0                   | 0-(N-1) (all)        | None                   |
+| k                   | k-(N-1)              | 0-(k-1)                |
+
+Create multiple configs that are identical except for `reinit_from_layer` (e.g., `0`, a middle layer index, and `N-1`), then run each config:
+
+```bash
+python scripts/run_finetuning_script.py <path_to_config.yaml> <output_dir>
+```
+
+This allows analysis of how much the model relies on pretrained representations at different depths.
