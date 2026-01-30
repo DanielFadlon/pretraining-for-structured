@@ -9,7 +9,7 @@
 
 # === Required Settings ===
 dataset_dir: "data/heart/textual_data"
-pretrained_model_id: "google/gemma-3-1b-it"
+pretrained_model_id: "meta-llama/Llama-3.2-1B-Instruct"
 training_args_yml_path: "configs/training_args.yaml"
 prompt_template_func_path: "src.templates.binary_classification.heart_long_response_prompt_formatting_func"
 
@@ -20,7 +20,7 @@ validation_data_file_name: "valid.parquet"
 
 # Evaluation
 should_evaluate: true
-evaluation_args_yml_path: "configs/evaluation_args/gemma/yes_no_eval_args.yaml"
+evaluation_args_yml_path: "configs/evaluation_args/llama/yes_no_eval_args.yaml"
 
 # Training subset (use full dataset by default)
 train_set_size:
