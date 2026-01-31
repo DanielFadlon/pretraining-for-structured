@@ -41,6 +41,7 @@ DEFAULTS = {
     'should_quant_to_4bit': False,
     'reinit_strategy': None,             # None = no reinitialization, "layers" or "full"
     'reinit_from_layer': 0,              # Default: reinitialize from layer 0 (all layers)
+    'use_first_n_layers': None,          # If set, structurally truncate to first N layers only
     'evaluation_args_yml_path': None,
     'should_evaluate': True,
     'train_set_size': {'percentage': 1},
@@ -67,6 +68,14 @@ def validate_config(config: dict[str, Any]) -> None:
     for required_value in REQUIRED_CONFIG_VALUES:
         if required_value not in config:
             raise ValueError(f"Config must specify '{required_value}'")
+
+    # Validate use_first_n_layers if provided
+    use_first_n_layers = config.get("use_first_n_layers")
+    if use_first_n_layers is not None:
+        if not isinstance(use_first_n_layers, int):
+            raise ValueError("use_first_n_layers must be an integer or null")
+        if use_first_n_layers <= 0:
+            raise ValueError("use_first_n_layers must be a positive integer")
 
     # Validate reinit_strategy if provided
     reinit_strategy = config.get('reinit_strategy')
@@ -168,6 +177,7 @@ def run_training(config: dict[str, Any], model_output_dir: str, cache_dir: str |
         train_set_size=config['train_set_size'],
         seed=config['seed'],
         out_cache_dir=out_cache_dir,
+        use_first_n_layers=config.get("use_first_n_layers"),
     )
 
 
