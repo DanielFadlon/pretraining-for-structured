@@ -95,3 +95,39 @@ python experiments/run_finetuning_script.py <path_to_config.yaml> <output_dir>
 ```
 
 This allows analysis of how much the model relies on pretrained representations at different depths.
+
+---
+
+### 4. Probing Experiments
+
+This repo includes a probing workflow that:
+- **Extracts embeddings** from a specified transformer layer for train/valid/test
+- **Trains a linear classifier** ("linear probe", e.g. logistic regression) on those embeddings
+
+The unified entrypoint is:
+
+```bash
+python experiments/run_probing.py --run-config configs/examples/probing_run.yaml
+```
+
+#### 4.a. Probing a specific layer
+
+Layer selection is controlled by the `layer` field in the probing run-config YAML:
+
+```yaml
+command: pipeline
+embed_config: configs/examples/probing_embed.yaml
+layer: 15
+model_dir: output/probing_models/example_run
+```
+
+This will probe the representation at **layer 15** by creating embeddings at that layer and then running classification.
+
+- The **embedding-definition config** (`embed_config`, e.g. `configs/examples/probing_embed.yaml`) defines:
+  - the model id/path (`model_path_or_id`)
+  - parquet paths for train/valid/test
+  - which column to embed (`column_to_embed`) and which label column to use (`label_column`)
+- The **run-config** defines:
+  - what to execute (`command: pipeline|embed|classify`)
+  - which layer to probe (`layer`)
+  - where to save/load the probe classifier (`model_dir`)
