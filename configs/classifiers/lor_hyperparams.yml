@@ -1,0 +1,28 @@
+# Logistic Regression GridSearch Hyperparameters
+
+binary:
+  - solver: [liblinear]
+    penalty: [l1]
+    C: [0.1, 1.0]
+    multi_class: [ovr]
+
+  - solver: [lbfgs]
+    penalty: [l2]
+    C: [0.1, 1.0, 10.0]
+    multi_class: [auto]
+
+multiclass:
+  - solver: [lbfgs]
+    penalty: [l2]
+    C: [0.1, 1.0, 10.0]
+    multi_class: [multinomial]
+
+  - solver: [saga]
+    penalty: [l1]
+    C: [0.1, 1.0]
+    multi_class: [multinomial]
+
+  - solver: [liblinear]
+    penalty: [l2]
+    C: [1.0]
+    multi_class: [ovr]
