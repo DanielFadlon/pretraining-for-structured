@@ -3,7 +3,7 @@
 # Useful for studying which layers contain task-specific vs general knowledge.
 #
 # Usage:
-#   python scripts/run_finetuning_script.py configs/examples/reinit_layers.yaml output/reinit_layers_model
+#   python experiments/run_finetuning_script.py configs/examples/reinit_layers.yaml output/reinit_layers_model
 
 # === Reinit Strategy ===
 reinit_strategy: "layers"  # Reinitialize transformer layers only
