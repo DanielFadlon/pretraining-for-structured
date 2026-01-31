@@ -1,0 +1,42 @@
+# First-Layer-Only (Pretrained) Finetuning Configuration
+# Trains using pretrained weights, but truncates the transformer to only the first layer.
+#
+# Usage:
+#   python experiments/run_finetuning_script.py configs/examples/first_layer_only_pretrained.yaml output/first_layer_only_model
+#
+# Notes:
+# - This is NOT reinitialization. It keeps pretrained weights, but removes layers 1..(N-1).
+# - The model still keeps embeddings + final norm + lm_head (when present), so it remains a valid CausalLM.
+#
+
+# === Required Settings ===
+dataset_dir: "data/heart/textual_data"
+pretrained_model_id: "meta-llama/Llama-3.2-1B-Instruct"
+training_args_yml_path: "configs/training_args.yaml"
+prompt_template_func_path: "src.templates.binary_classification.heart_long_response_prompt_formatting_func"
+
+# === Truncation (key setting) ===
+use_first_n_layers: 1
+
+# === Optional Settings ===
+# Data files (defaults shown)
+train_data_file_name: "train.parquet"
+validation_data_file_name: "valid.parquet"
+
+# Evaluation
+should_evaluate: true
+evaluation_args_yml_path: "configs/evaluation_args/llama/yes_no_eval_args.yaml"
+
+# Training subset (use full dataset by default)
+train_set_size:
+  percentage: 1
+
+# Quantization
+should_quant_to_4bit: false
+
+# Reproducibility
+seed: 42
+
+# Cache directory for checkpoints
+out_cache_dir: null
+
