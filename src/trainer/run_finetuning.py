@@ -11,6 +11,7 @@ import gc
 from typing import Any, Callable, Tuple
 
 import torch
+import torch.nn as nn
 from datasets import Dataset, Split, load_dataset
 from peft import LoraConfig
 from sklearn.model_selection import train_test_split
@@ -45,6 +46,7 @@ def finetune_model(
     train_set_size: dict[str, float] | None = None,
     seed: int = 42,
     out_cache_dir: str | None = None,
+    use_first_n_layers: int | None = None,
 ) -> None:
     """
     Train a model using SFT with optional weight injection.
@@ -101,6 +103,10 @@ def finetune_model(
         should_quant_to_4bit=should_quant_to_4bit,
         training_args=training_args,
     )
+
+    # Optionally truncate model to first N layers only
+    if use_first_n_layers is not None:
+        _truncate_model_to_first_n_layers(model, use_first_n_layers)
 
     # Apply weight injection if configured
     if injection_params:
@@ -279,6 +285,65 @@ def _load_model_and_tokenizer(
     model.config.pretraining_tp = 1
 
     return model, tokenizer, peft_config
+
+
+def _truncate_model_to_first_n_layers(model: Any, use_first_n_layers: int) -> None:
+    """
+    Truncate a decoder-only LM (e.g., Llama/Gemma) to use only the first N transformer layers.
+
+    This is a structural change (layers are removed), not freezing. It reduces compute and
+    ensures training truly runs with fewer layers.
+    """
+    if not isinstance(use_first_n_layers, int):
+        raise ValueError(f"use_first_n_layers must be int, got {type(use_first_n_layers)}")
+    if use_first_n_layers <= 0:
+        raise ValueError(f"use_first_n_layers must be positive, got {use_first_n_layers}")
+
+    # Most Llama/Gemma-style models expose layers at: model.model.layers
+    if not hasattr(model, "model") or not hasattr(model.model, "layers"):
+        raise ValueError(
+            "Model does not expose layers at `model.model.layers`; "
+            "use_first_n_layers currently supports Llama/Gemma-style architectures."
+        )
+
+    layers = model.model.layers
+    try:
+        total_layers = len(layers)
+    except TypeError as e:
+        raise ValueError("Could not determine number of layers from model.model.layers") from e
+
+    print(f"Truncating model to use only first {use_first_n_layers} layers")
+    print(f"Original model has {total_layers} layers")
+
+    if use_first_n_layers > total_layers:
+        raise ValueError(
+            f"use_first_n_layers ({use_first_n_layers}) cannot be greater than total layers ({total_layers})"
+        )
+
+    # Keep container type as ModuleList to preserve HF module structure
+    model.model.layers = nn.ModuleList(list(layers)[:use_first_n_layers])
+
+    # Update config to reflect the new number of layers
+    if hasattr(model, "config") and model.config is not None:
+        if hasattr(model.config, "num_hidden_layers"):
+            model.config.num_hidden_layers = use_first_n_layers
+
+    # Log head-connection sanity checks (helpful for debugging)
+    if hasattr(model.model, "norm") and model.model.norm is not None:
+        print("Preserving final layer normalization for proper LM head connection")
+    else:
+        print("Warning: No final layer norm found. Model might not have proper head connection.")
+
+    if hasattr(model, "lm_head") and model.lm_head is not None:
+        print("Language modeling head is properly connected")
+        lm_head_in = getattr(model.lm_head, "in_features", None)
+        hidden_size = getattr(getattr(model, "config", None), "hidden_size", None)
+        if lm_head_in is not None and hidden_size is not None and lm_head_in != hidden_size:
+            print(f"Warning: LM head input size ({lm_head_in}) != model hidden size ({hidden_size})")
+    else:
+        print("Warning: No language modeling head found!")
+
+    print(f"Model truncated to {use_first_n_layers} layers")
 
 
 def _apply_weight_injection(model: Any, injection_params: dict[str, Any]) -> None:

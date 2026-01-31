@@ -98,7 +98,28 @@ This allows analysis of how much the model relies on pretrained representations 
 
 ---
 
-### 4. Probing Experiments
+### 4. Truncated-Depth Finetuning (first layer only)
+
+Train on **pretrained weights**, but structurally truncate the transformer to only the first \(N\) layers (instead of training the full depth).
+
+An example config for **first-layer-only finetuning** is provided:
+- `configs/examples/first_layer_finetuning.yaml`
+
+Run it like any other finetuning config:
+
+```bash
+python experiments/run_finetuning_script.py configs/examples/first_layer_finetuning.yaml output/first_layer_only_model
+```
+
+**Key config setting:**
+
+```yaml
+use_first_n_layers: 1
+```
+
+---
+
+### 5. Probing Experiments
 
 This repo includes a probing workflow that:
 - **Extracts embeddings** from a specified transformer layer for train/valid/test
