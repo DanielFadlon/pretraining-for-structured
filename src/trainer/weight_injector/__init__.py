@@ -1,1 +1,1 @@
-from .weight_injector import WeightInjector, ReinitStrategy
+from src.trainer.weight_injector.weight_injector import ReinitStrategy, WeightInjector
