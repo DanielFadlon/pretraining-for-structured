@@ -2,7 +2,7 @@
 # Standard finetuning without any weight reinitialization
 #
 # Usage:
-#   python scripts/run_finetuning_script.py configs/examples/regular_finetuning.yaml output/regular_model
+#   python experiments/run_finetuning_script.py configs/examples/regular_finetuning.yaml output/regular_model
 
 # === Reinit Strategy ===
 # reinit_strategy: null  # No reinitialization (default, can be omitted)

@@ -17,7 +17,7 @@ Compare the effect of pretrained weights vs training from scratch using random r
 Standard finetuning (that preserves pretrained weights). The model starts with knowledge learned during pretraining.
 
 ```bash
-python scripts/run_finetuning_script.py configs/examples/regular_finetuning.yaml output/pt_llama
+python experiments/run_finetuning_script.py configs/examples/regular_finetuning.yaml output/pt_llama
 ```
 
 **Key config settings:**
@@ -30,7 +30,7 @@ pretrained_model_id: "meta-llama/Llama-3.2-1B-Instruct"
 Reinitialize all weights with random values from a zero-mean normal distribution (same standard deviation as original), so training begins from scratch.
 
 ```bash
-python scripts/run_finetuning_script.py configs/examples/fully_reinitialize.yaml output/fully_reinit_model
+python experiments/run_finetuning_script.py configs/examples/fully_reinitialize.yaml output/fully_reinit_model
 ```
 
 **Key config settings:**
@@ -73,7 +73,7 @@ Study the effect of **pretrained layers** by keeping a prefix (“head”) of th
 Reinitialize transformer layers from a starting layer through the final layer (the “tail” of the model). Layers before `reinit_from_layer` remain pretrained (the “head”).
 
 ```bash
-python scripts/run_finetuning_script.py configs/examples/reinit_layers.yaml output/reinit_layers_model
+python experiments/run_finetuning_script.py configs/examples/reinit_layers.yaml output/reinit_layers_model
 ```
 
 **Key config settings:**
@@ -91,7 +91,7 @@ reinit_from_layer: 10      # Reinitialize from layer 10 to the end
 Create multiple configs that are identical except for `reinit_from_layer` (e.g., `0`, a middle layer index, and `N-1`), then run each config:
 
 ```bash
-python scripts/run_finetuning_script.py <path_to_config.yaml> <output_dir>
+python experiments/run_finetuning_script.py <path_to_config.yaml> <output_dir>
 ```
 
 This allows analysis of how much the model relies on pretrained representations at different depths.

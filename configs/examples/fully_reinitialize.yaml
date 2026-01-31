@@ -3,7 +3,7 @@
 # Uses same std as original weights for each tensor.
 #
 # Usage:
-#   python scripts/run_finetuning_script.py configs/examples/fully_reinitialize.yaml output/fully_reinit_model
+#   python experiments/run_finetuning_script.py configs/examples/fully_reinitialize.yaml output/fully_reinit_model
 
 # === Reinit Strategy ===
 reinit_strategy: "full"  # Reinitialize ALL modules via model.apply()

@@ -1,7 +1,7 @@
-# Example execution definition for scripts/run_probing.py
+# Example execution definition for experiments/run_probing.py
 #
 # Usage:
-#   python scripts/run_probing.py --run-config configs/examples/probing_run.yaml
+#   python experiments/run_probing.py --run-config configs/examples/probing_run.yaml
 #
 # Notes:
 # - `embed_config` points to the YAML that defines how embeddings are created:
