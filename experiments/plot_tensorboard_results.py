@@ -4,7 +4,7 @@ Plot TensorBoard Results
 Extracts metrics from TensorBoard event files and saves plots as images.
 
 Usage:
-    python scripts/plot_tensorboard_results.py <log_dir> [output_dir]
+    python experiments/plot_tensorboard_results.py <log_dir> [output_dir]
 """
 
 import os

@@ -4,7 +4,7 @@ Finetuning Script
 Finetune a model with optional weight reinitialization.
 
 Usage:
-    python scripts/run_finetuning_script.py <config.yaml> <output_dir> [cache_dir]
+    python experiments/run_finetuning_script.py <config.yaml> <output_dir> [cache_dir]
 
 Reinit Strategies (set via 'reinit_strategy' in config):
     - null (or omitted) - Standard finetuning without weight reinitialization
