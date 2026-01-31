@@ -1,0 +1,28 @@
+# Example execution definition for scripts/run_probing.py
+#
+# Usage:
+#   python scripts/run_probing.py --run-config configs/examples/probing_run.yaml
+#
+# Notes:
+# - `embed_config` points to the YAML that defines how embeddings are created:
+#   model id/path, parquet paths, column_to_embed/label_column, and prompt settings.
+# - `model_dir` is where the probing classifier is saved/loaded.
+#   For `clf: lor` it writes: <model_dir>/lor_best_model.joblib
+# - In `pipeline`, if `embeddings_dir` is omitted, embeddings are written to a temp dir.
+#   You can keep that temp dir by setting `keep_embeddings: true`.
+#
+command: pipeline
+embed_config: configs/examples/probing_embed.yaml
+layer: 15
+
+# pipeline-only (optional):
+# embeddings_dir: output/probing_embeddings/example_run
+# keep_embeddings: false
+
+# classify / pipeline:
+model_dir: output/probing_models/example_run
+clf: lor
+classify_mode: train_and_infer   # or: infer_only
+# If true, also print Accuracy (in addition to AUC).
+eval_accuracy: true
+# hyperparams_yml: configs/classifiers/lor_hyperparams.yml

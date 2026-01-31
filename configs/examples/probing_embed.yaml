@@ -1,0 +1,31 @@
+# Example embedding-definition config for probing.
+#
+# This file is referenced by `configs/examples/probing_run.yaml` via `embed_config`.
+#
+
+# HuggingFace model id OR local path to a model directory.
+model_path_or_id: "meta-llama/Llama-3.2-1B-Instruct"
+
+# How to form the text that gets embedded.
+# - data_only: embed the raw `column_to_embed`
+# - prediction_prompt: build a prompt per row using `prompt_template_func_path`, then embed that prompt (with task specific instruction and question for prediction)
+creation_state: "data_only"
+
+# Required only when creation_state is "prediction_prompt".
+# This must be a dotted python path to a function, e.g.:
+#   "src.templates.binary_classification.prompt_template"
+# prompt_template_func_path: "src.templates.binary_classification.prompt_template"
+
+data:
+  train: "data/my_task/train.parquet"
+  valid: "data/my_task/valid.parquet"
+  test: "data/my_task/test.parquet"   # optional
+
+# Which parquet column contains the text to embed (default: "text").
+column_to_embed: "text"
+
+# Which parquet column contains labels (default: "label").
+label_column: "label"
+
+# Must be true if you want to run classification (it saves y_train/y_valid/...).
+should_save_labels: true
