@@ -1,5 +1,32 @@
 # pretraining-for-structured
 
+
+## 📚 Citation
+
+If you use this code or build upon this work, **please cite**:
+
+```bibtex
+@inproceedings{fadlon-bar-2026-much,
+    title = "How Much Pretraining Does Structured Data Need?",
+    author = "Fadlon, Daniel  and
+      Bar, Kfir",
+    editor = "Demberg, Vera  and
+      Inui, Kentaro  and
+      Marquez, Llu{\'i}s",
+    booktitle = "Proceedings of the 19th Conference of the {E}uropean Chapter of the {A}ssociation for {C}omputational {L}inguistics (Volume 1: Long Papers)",
+    month = mar,
+    year = "2026",
+    address = "Rabat, Morocco",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2026.eacl-long.154/",
+    doi = "10.18653/v1/2026.eacl-long.154",
+    pages = "3352--3365",
+    ISBN = "979-8-89176-380-7"
+}
+```
+
+
+
 ## Methods
 
 This section describes the experimental methods available in this project and how to execute them.
